@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Quarter Million — Your goal, in view</title>
+  <meta name="description" content="A private tracker for one goal: $250,000 by December 2027.">
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#f5f7f3">
+  <meta name="theme-color" content="#f5f7f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111b17" media="(prefers-color-scheme: dark)">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Quarter Million">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+
+  <script>
+    // Apply the saved theme before first paint to avoid a flash.
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('qm:theme'); } catch (e) {}
+      var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.classList.toggle('dark', dark);
+    })();
+  </script>
+  <link href="styles.css" rel="stylesheet">
+</head>
+<body>
+<div class="app-shell">
+  <header class="flex items-center justify-between gap-3 topbar">
+    <a class="brand" href="#"><span class="brand-icon">q.</span> quarter million<span class="brand-dot">®</span></a>
+    <div class="flex items-center gap-3">
+      <span class="personal">PERSONAL GOAL / 01</span>
+      <button aria-label="Toggle color theme" class="icon-button" id="theme">◐</button>
+      <span class="avatar">RK</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="flex flex-col sm:flex-row justify-between gap-4 intro">
+      <div>
+        <p class="eyebrow">THE BIGGER PICTURE</p>
+        <h1>God gave you that dream<br><span>for a reason.</span></h1>
+      </div>
+    </div>
+
+    <div class="syncbar flex items-center justify-between gap-3">
+      <span id="sync" role="status">Connecting to your tracker…</span>
+      <button class="text-button" id="refresh">↻ Refresh</button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 dashboard-grid">
+      <section class="balance-card md:col-span-3">
+        <div class="flex justify-between items-center gap-3">
+          <span class="eyebrow">TOTAL SAVED</span>
+          <span class="badge">↗ DECEMBER 2027 GOAL</span>
+        </div>
+        <div class="balance" id="balance">—<span>USD</span></div>
+        <p class="balance-context">towards your <b id="goal">$250,000</b> goal</p>
+        <div class="flex justify-between progress-label">
+          <span id="percent">— complete</span>
+          <span id="remaining">— remaining</span>
+        </div>
+        <div aria-label="Goal progress" aria-valuemax="100" aria-valuemin="0" class="track" id="progress" role="progressbar"><div id="fill"></div></div>
+        <div class="milestone-labels flex justify-between">
+          <span>START</span><span>$62.5K</span><span>$125K</span><span>$187.5K</span><span>$250K</span>
+        </div>
+        <div class="card-bottom flex justify-between gap-3">
+          <span>Small steps. Real progress.</span><span>01 / 01</span>
+        </div>
+      </section>
+
+      <section class="panel numbers md:col-span-3">
+        <div>
+          <span class="eyebrow">MONTHLY NEEDED</span>
+          <strong id="monthly">—</strong>
+          <p class="subtle">Even savings, without investment growth.</p>
+        </div>
+        <div class="flex justify-between items-end gap-3">
+          <div>
+            <span class="eyebrow">TIME REMAINING</span>
+            <strong id="days">—</strong>
+          </div>
+          <span class="subtle" id="months"></span>
+        </div>
+        <div>
+          <span class="eyebrow">PACE CHECK</span>
+          <p id="pace">Waiting for your balance.</p>
+        </div>
+      </section>
+
+      <section class="panel md:col-span-1">
+        <span class="eyebrow">MAKE IT HAPPEN</span>
+        <h2 class="update-title">A little closer?</h2>
+        <p class="subtle">Update your total balance, not just this month's contribution.</p>
+        <form id="update">
+          <label for="amount">Current balance <span>USD</span></label>
+          <div class="input-wrap">
+            <span>$</span>
+            <input disabled id="amount" min="0" placeholder="0.00" required step="0.01" type="number" inputmode="decimal">
+          </div>
+          <label for="note">A note <span>optional</span></label>
+          <input disabled id="note" maxlength="200" placeholder="A good month, a new milestone…">
+          <div id="pass-wrap" hidden>
+            <label for="pass">Passphrase <span>remembered on this device</span></label>
+            <input id="pass" type="password" autocomplete="current-password" placeholder="Your save passphrase">
+          </div>
+          <button class="primary" disabled id="save" type="submit">Save progress <span>↗</span></button>
+          <p class="subtle form-message" id="form-msg" role="status"></p>
+        </form>
+        <p class="privacy">↳ Saved privately. Syncs to every device you open this on.</p>
+      </section>
+
+      <section class="panel chart-panel md:col-span-2">
+        <div class="flex justify-between items-start gap-3">
+          <div>
+            <h2>The road to $250k</h2>
+            <p class="subtle">Your balance against an even savings path.</p>
+          </div>
+          <span class="chart-tag">TIMELINE</span>
+        </div>
+        <div class="chart-space" id="chart"><p class="subtle">Your timeline will appear once connected.</p></div>
+        <div class="flex flex-wrap gap-4 legend">
+          <span><i></i> Recorded balance</span>
+          <span><i class="dashed"></i> Target path · no growth assumed</span>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel history-panel">
+      <div class="flex justify-between gap-3">
+        <div>
+          <h2>Progress, documented.</h2>
+          <p class="subtle">Every update is a step in your story.</p>
+        </div>
+        <span class="chart-tag">RECENT ACTIVITY</span>
+      </div>
+      <div class="table-wrapper" id="history"><p class="empty">Connect your tracker to view your updates.</p></div>
+    </section>
+
+    <footer class="flex flex-wrap justify-between gap-3">
+      <span>quarter million / Your goal, in view.</span>
+      <a href="#" id="export">Export CSV ↗</a>
+    </footer>
+  </main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

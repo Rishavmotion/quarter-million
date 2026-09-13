@@ -1,0 +1,11 @@
+{
+  "name": "quarter-million",
+  "private": true,
+  "description": "A private savings tracker — $250,000 by December 2027. Cloudflare Pages + KV.",
+  "scripts": {
+    "dev": "wrangler pages dev public --kv TRACKER --port 8788"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}
