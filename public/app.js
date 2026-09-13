@@ -11,6 +11,7 @@ const DAY = 86400000;
 
 let current = null; // derived view model
 let busy = false;
+let mode = 'add'; // 'add' = contribution on top of the balance, 'set' = new total
 
 const usd = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
@@ -53,7 +54,7 @@ function derive(state) {
   const target = Number(settings.target) > 0 ? Number(settings.target) : 250000;
 
   const entries = (state.entries || [])
-    .map(e => ({ t: Date.parse(e.ts), amount: Number(e.amount), note: String(e.note || '') }))
+    .map(e => ({ ts: e.ts, t: Date.parse(e.ts), amount: Number(e.amount), note: String(e.note || '') }))
     .filter(e => Number.isFinite(e.t) && Number.isFinite(e.amount))
     .sort((a, b) => a.t - b.t);
 
@@ -107,13 +108,13 @@ function render(d) {
       : (Math.abs(d.pace_delta) < 1
         ? 'Right on your target path.'
         : usd(Math.abs(d.pace_delta)) + (d.pace_delta >= 0 ? ' ahead of' : ' behind') + ' the even savings path.'));
-  $('amount').value = d.entries.length ? d.have : '';
   drawChart(d);
   $('history').innerHTML = d.history.length
     ? '<table><thead><tr><th>DATE / NOTE</th><th>BALANCE</th><th>CHANGE</th></tr></thead><tbody>' +
       d.history.map(h =>
         '<tr><td>' + esc(fmtDate(h.t)) + ' · ' + esc(fmtTime(h.t)) +
         (h.note ? '<small>' + esc(h.note) + '</small>' : '') +
+        '<button type="button" class="remove" data-ts="' + esc(h.ts) + '" aria-label="Remove the ' + esc(usd(h.amount)) + ' entry from ' + esc(fmtDate(h.t)) + '">Remove</button>' +
         '</td><td>' + usd(h.amount) + '</td><td>' +
         (h.delta === null ? '—' : (h.delta > 0 ? '+' : '') + usd(h.delta)) +
         '</td></tr>').join('') +
@@ -162,7 +163,45 @@ function show(state, syncText) {
   $('amount').disabled = false;
   $('note').disabled = false;
   $('save').disabled = false;
+  syncAmountField();
 }
+
+// ---------- add / set-total mode ----------
+function setMode(next) {
+  mode = next;
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    const on = b.dataset.mode === mode;
+    b.classList.toggle('is-active', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+  $('amount-label').textContent = mode === 'add' ? 'Amount to add' : 'Total balance now';
+  syncAmountField();
+}
+
+function syncAmountField() {
+  const hasBalance = current && current.entries.length;
+  $('amount').value = (mode === 'set' && hasBalance) ? current.have : '';
+  $('amount').placeholder = '0.00';
+  updatePreview();
+}
+
+function updatePreview() {
+  const out = $('preview');
+  const raw = $('amount').value.trim();
+  const n = Number(raw);
+  if (!current || raw === '' || !Number.isFinite(n)) { out.textContent = ''; return; }
+  if (mode === 'add') {
+    out.textContent = 'New balance ' + usd(current.have + n) + ' (was ' + usd(current.have) + ').';
+  } else {
+    const d = n - current.have;
+    out.textContent = Math.abs(d) < 0.5
+      ? 'No change from your current ' + usd(current.have) + '.'
+      : (d > 0 ? '+' : '−') + usd(Math.abs(d)) + ' from your current ' + usd(current.have) + '.';
+  }
+}
+
+document.querySelectorAll('.mode-btn').forEach(b => { b.onclick = () => setMode(b.dataset.mode); });
+$('amount').addEventListener('input', updatePreview);
 
 async function load() {
   if (busy) return;
@@ -193,51 +232,90 @@ function needPassphrase(message) {
   $('pass').focus();
 }
 
-$('update').onsubmit = async e => {
-  e.preventDefault();
-  if (busy || !current) return;
+function currentToken() {
+  return store.get(TOKEN_KEY) || $('pass').value.trim();
+}
 
-  const raw = $('amount').value.trim();
-  const amount = Number(raw);
-  if (raw === '' || !Number.isFinite(amount) || amount < 0) {
-    $('form-msg').textContent = 'Enter a valid balance of zero or more.';
-    return;
-  }
-  const token = store.get(TOKEN_KEY) || $('pass').value.trim();
-  if (!token) { needPassphrase('Enter your passphrase to save.'); return; }
-
+// Runs an authenticated write, then shows the returned state. Returns true on success.
+async function writeState(path, options, verb) {
+  const token = currentToken();
+  if (!token) { needPassphrase('Enter your passphrase to ' + verb + '.'); return false; }
   busy = true;
   $('save').disabled = true;
   $('refresh').disabled = true;
-  $('form-msg').textContent = 'Saving your balance…';
   try {
-    const state = await request(API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ amount, note: $('note').value })
+    const state = await request(path, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, ...(options.headers || {}) }
     });
     store.set(TOKEN_KEY, token);
     $('pass').value = '';
     $('pass-wrap').hidden = true;
-    $('note').value = '';
     cacheState(state);
     show(state, '● Synced · ' + fmtTime(Date.now()));
-    $('form-msg').textContent = 'Your update is saved.';
+    return true;
   } catch (err) {
     if (err.status === 401) {
       store.del(TOKEN_KEY);
       needPassphrase('That passphrase was not accepted. Try again.');
     } else {
       $('form-msg').textContent = err.name === 'AbortError'
-        ? 'Save timed out. Refresh and check your balance before trying again.'
-        : (navigator.onLine === false ? 'You are offline. Your balance was not saved.' : err.message + ' Refresh to check whether it saved.');
+        ? 'That took too long. Refresh and check your log before trying again.'
+        : (navigator.onLine === false ? 'You are offline. Nothing was changed.' : err.message + ' Refresh to check what was saved.');
     }
+    return false;
   } finally {
     busy = false;
     $('save').disabled = false;
     $('refresh').disabled = false;
   }
+}
+
+$('update').onsubmit = async e => {
+  e.preventDefault();
+  if (busy || !current) return;
+
+  const raw = $('amount').value.trim();
+  const n = Number(raw);
+  if (raw === '' || !Number.isFinite(n) || n < 0) {
+    $('form-msg').textContent = mode === 'add' ? 'Enter the amount you added.' : 'Enter a valid balance of zero or more.';
+    return;
+  }
+  if (mode === 'add' && n === 0) {
+    $('form-msg').textContent = 'Enter an amount above zero, or switch to Set total.';
+    return;
+  }
+  const total = mode === 'add' ? current.have + n : n;
+
+  $('form-msg').textContent = 'Saving your balance…';
+  const ok = await writeState(API, {
+    method: 'POST',
+    body: JSON.stringify({ amount: total, note: $('note').value })
+  }, 'save');
+  if (ok) {
+    $('note').value = '';
+    $('form-msg').textContent = mode === 'add'
+      ? 'Added ' + usd(n) + '. Your balance is now ' + usd(total) + '.'
+      : 'Your balance is now ' + usd(total) + '.';
+  }
 };
+
+// ---------- remove an entry ----------
+$('history').addEventListener('click', async e => {
+  const btn = e.target.closest('.remove');
+  if (!btn || busy || !current) return;
+  const entry = current.entries.find(en => en.ts === btn.dataset.ts);
+  if (!entry) return;
+  if (!confirm('Remove the ' + usd(entry.amount) + ' entry from ' + fmtDate(entry.t) + '? This cannot be undone.')) return;
+  if (!currentToken()) {
+    needPassphrase('Enter your passphrase to remove entries.');
+    $('pass').scrollIntoView({ block: 'center', behavior: 'smooth' });
+    return;
+  }
+  $('form-msg').textContent = 'Removing entry…';
+  const ok = await writeState(API + '?ts=' + encodeURIComponent(entry.ts), { method: 'DELETE' }, 'remove entries');
+  if (ok) $('form-msg').textContent = 'Removed the ' + usd(entry.amount) + ' entry.';
+});
 
 // ---------- export ----------
 $('export').onclick = e => {

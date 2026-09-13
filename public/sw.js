@@ -2,7 +2,7 @@
 // - App shell (HTML/CSS/JS): network first, fall back to cache when offline.
 // - Images/icons: cache first.
 // - /api/*: never cached; the page keeps its own last-known copy in localStorage.
-const VERSION = 'qm-v1';
+const VERSION = 'qm-v2';
 const SHELL = ['/', '/index.html', '/styles.css', '/app.js', '/manifest.webmanifest',
                '/balance-background.jpeg', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png'];
 

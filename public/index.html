@@ -96,13 +96,18 @@
       <section class="panel md:col-span-1">
         <span class="eyebrow">MAKE IT HAPPEN</span>
         <h2 class="update-title">A little closer?</h2>
-        <p class="subtle">Update your total balance, not just this month's contribution.</p>
+        <p class="subtle">Add what you put away, or set your total balance.</p>
         <form id="update">
-          <label for="amount">Current balance <span>USD</span></label>
+          <div class="mode" role="group" aria-label="Update type">
+            <button type="button" class="mode-btn is-active" data-mode="add" aria-pressed="true">+ Add to balance</button>
+            <button type="button" class="mode-btn" data-mode="set" aria-pressed="false">Set total</button>
+          </div>
+          <label for="amount"><span id="amount-label">Amount to add</span> <span>USD</span></label>
           <div class="input-wrap">
             <span>$</span>
             <input disabled id="amount" min="0" placeholder="0.00" required step="0.01" type="number" inputmode="decimal">
           </div>
+          <p class="subtle preview" id="preview" aria-live="polite"></p>
           <label for="note">A note <span>optional</span></label>
           <input disabled id="note" maxlength="200" placeholder="A good month, a new milestone…">
           <div id="pass-wrap" hidden>

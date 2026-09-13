@@ -105,6 +105,24 @@ async function postTracker(request, env) {
   return json(state);
 }
 
+// DELETE /api/tracker?ts=<entry timestamp> — remove one entry.
+async function deleteEntry(request, env, url) {
+  const auth = authorized(request, env);
+  if (auth === 'unconfigured') return json({ error: 'SAVE_TOKEN is not configured.' }, 500);
+  if (auth === 'denied') return json({ error: 'Wrong passphrase.' }, 401);
+
+  const ts = url.searchParams.get('ts');
+  if (!ts) return json({ error: 'Missing ts.' }, 400);
+
+  const state = await readState(env);
+  const kept = state.entries.filter(e => e.ts !== ts);
+  if (kept.length === state.entries.length) return json({ error: 'Entry not found.' }, 404);
+  state.entries = kept;
+
+  await env.TRACKER.put(KEY, JSON.stringify(state));
+  return json(state);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -113,6 +131,7 @@ export default {
       if (!env.TRACKER) return json({ error: 'KV binding TRACKER is not configured.' }, 500);
       if (request.method === 'GET') return getTracker(env);
       if (request.method === 'POST') return postTracker(request, env);
+      if (request.method === 'DELETE') return deleteEntry(request, env, url);
       return json({ error: 'Method not allowed.' }, 405);
     }
     if (url.pathname.startsWith('/api/')) return json({ error: 'Not found.' }, 404);
