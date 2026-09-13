@@ -1,11 +1,13 @@
-// Cloudflare Pages Function: GET/POST /api/tracker
+// Quarter Million — Cloudflare Worker
+//
+// Static files in public/ are served by the assets binding; anything under /api/
+// reaches this fetch handler.
 //
 // Storage: one JSON document in the TRACKER KV namespace under the key "state".
 //   { settings: { target, start, deadline }, entries: [ { ts, amount, note } ] }
 //
-// Bindings needed on the Pages project:
-//   KV namespace  TRACKER
-//   Secret        SAVE_TOKEN   (passphrase required for every write)
+// Bindings (wrangler.jsonc): KV namespace TRACKER, assets ASSETS.
+// Secret (dashboard):        SAVE_TOKEN — passphrase required for every write.
 
 const KEY = 'state';
 const MAX_NOTE = 200;
@@ -45,14 +47,11 @@ function isIsoDate(s) {
   return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s + 'T00:00:00Z'));
 }
 
-export async function onRequestGet({ env }) {
-  if (!env.TRACKER) return json({ error: 'KV binding TRACKER is not configured.' }, 500);
+async function getTracker(env) {
   return json(await readState(env));
 }
 
-export async function onRequestPost({ request, env }) {
-  if (!env.TRACKER) return json({ error: 'KV binding TRACKER is not configured.' }, 500);
-
+async function postTracker(request, env) {
   const auth = authorized(request, env);
   if (auth === 'unconfigured') return json({ error: 'SAVE_TOKEN is not configured.' }, 500);
   if (auth === 'denied') return json({ error: 'Wrong passphrase.' }, 401);
@@ -98,10 +97,26 @@ export async function onRequestPost({ request, env }) {
     });
   }
 
-  if (body.amount === undefined && !body.settings) {
+  if (!body || (body.amount === undefined && !body.settings)) {
     return json({ error: 'Nothing to save.' }, 400);
   }
 
   await env.TRACKER.put(KEY, JSON.stringify(state));
   return json(state);
 }
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+
+    if (url.pathname === '/api/tracker') {
+      if (!env.TRACKER) return json({ error: 'KV binding TRACKER is not configured.' }, 500);
+      if (request.method === 'GET') return getTracker(env);
+      if (request.method === 'POST') return postTracker(request, env);
+      return json({ error: 'Method not allowed.' }, 405);
+    }
+    if (url.pathname.startsWith('/api/')) return json({ error: 'Not found.' }, 404);
+
+    return env.ASSETS.fetch(request);
+  }
+};
